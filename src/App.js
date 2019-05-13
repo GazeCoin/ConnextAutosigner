@@ -1,35 +1,47 @@
-import "./App.css";
-import { Paper, withStyles, Grid } from "@material-ui/core";
-import * as eth from "ethers";
+import { setWallet } from "./utils/actions.js";
+import { createStore } from "redux";
+//import { getConnextClient } from "connext/dist/Connext.js";
+import Connext from 'connext';
+import { types, getters, big, createClient } from "connext/dist";
+import ProviderOptions from "../dist/utils/ProviderOptions.js";
+import clientProvider from "../dist/utils/web3/clientProvider.js";
+import { Big, maxBN, minBN } from 'connext/dist/lib/bn.js';
+import { createWalletFromMnemonic, createWallet } from "./walletGen";
+import axios from "axios";
+//import BigNumber from "bignumber.js";
+//import {CurrencyType} from "connext/dist/state/ConnextState/CurrencyTypes";
+//import CurrencyConvertable from "connext/dist/lib/currency/CurrencyConvertable";
+//import getExchangeRates from "connext/dist/lib/getExchangeRates";
 import interval from "interval-promise";
-import React from "react";
-import { BrowserRouter as Router, Route, Redirect } from "react-router-dom";
-import * as Connext from "connext";
+import fs from 'fs';
+import Storage from './utils/Storage.js';
+import Express from 'express';
+import Http from 'http';
+import socketIo from 'socket.io';
 
-// Pages
-import Home from "./components/Home";
-import DepositCard from "./components/depositCard";
-import AppBarComponent from "./components/AppBar";
-import SettingsCard from "./components/settingsCard";
-import ReceiveCard from "./components/receiveCard";
-import SendCard from "./components/sendCard";
-import CashOutCard from "./components/cashOutCard";
-import SupportCard from "./components/supportCard";
-import RedeemCard from "./components/redeemCard";
-import SetupCard from "./components/setupCard";
-import Confirmations from "./components/Confirmations";
-import MySnackbar from "./components/snackBar";
-
-const humanTokenAbi = require("./abi/humanToken.json");
-
-const { Big, minBN } = Connext.big;
-const { CurrencyType, CurrencyConvertable } = Connext.types;
+const { CurrencyType, CurrencyConvertable } = types
 const { getExchangeRates, hasPendingOps } = new Connext.Utils();
+//const { Big, maxBN, minBN } = Connext.big
+export const store = createStore(setWallet, null);
 
-let publicUrl;
+
+let publicUrl='localhost';
+let localStorage = new Storage();
+let webSocket;
+
+const Web3 = require("web3");
+const eth = require("ethers");
+//const BN = Web3.utils.BN;
+//const humanTokenAbi = require("./abi/humanToken.json");
 
 const env = process.env.NODE_ENV;
-const tokenAbi = humanTokenAbi;
+const ERC20 = [{ "constant": true, "inputs": [], "name": "name", "outputs": [{ "name": "", "type": "string" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "minter", "outputs": [{ "name": "", "type": "address" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "totalSupply", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "createIlliquidToken", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_from", "type": "address" }, { "name": "_recipient", "type": "address" }, { "name": "_amount", "type": "uint256" }], "name": "transferFrom", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "endMintingTime", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "createToken", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "", "type": "address" }], "name": "illiquidBalance", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "symbol", "outputs": [{ "name": "", "type": "string" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_amount", "type": "uint256" }], "name": "transfer", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "LOCKOUT_PERIOD", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }, { "name": "_spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "o_remaining", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [], "name": "makeLiquid", "outputs": [], "payable": false, "type": "function" }, { "inputs": [{ "name": "_minter", "type": "address" }, { "name": "_endMintingTime", "type": "uint256" }], "payable": false, "type": "constructor" }, { "anonymous": false, "inputs": [{ "indexed": true, "name": "_from", "type": "address" }, { "indexed": true, "name": "_recipient", "type": "address" }, { "indexed": false, "name": "_value", "type": "uint256" }], "name": "Transfer", "type": "event" }, { "anonymous": false, "inputs": [{ "indexed": true, "name": "_owner", "type": "address" }, { "indexed": true, "name": "_spender", "type": "address" }, { "indexed": false, "name": "_value", "type": "uint256" }], "name": "Approval", "type": "event" }]
+
+const tokenAbi = ERC20;
+const WS_PORT = 1337;
+const MAX_HISTORY_ITEMS = 20;
+
+const StatusEnum = {stopped:"stopped", running: "running", paused: "paused"};
 
 // Optional URL overrides for custom hubs
 const overrides = {
@@ -43,43 +55,22 @@ const overrides = {
   mainnetEth: process.env.REACT_APP_MAINNET_ETH_OVERRIDE
 };
 
-// Constants for channel max/min - this is also enforced on the hub
-const DEPOSIT_ESTIMATED_GAS = Big("700000"); // 700k gas
+const DEPOSIT_ESTIMATED_GAS = new Big("700000") // 700k gas
+//const DEPOSIT_MINIMUM_WEI = new BigNumber(Web3.utils.toWei("0.020", "ether")); // 30 FIN
 const HUB_EXCHANGE_CEILING = eth.constants.WeiPerEther.mul(Big(69)); // 69 TST
 const CHANNEL_DEPOSIT_MAX = eth.constants.WeiPerEther.mul(Big(30)); // 30 TST
-const MAX_GAS_PRICE = Big("20000000000"); // 20 gWei
+const HASH_PREAMBLE = "SpankWallet authentication message:"
+const LOW_BALANCE_THRESHOLD = Big(process.env.LOW_BALANCE_THRESHOLD);
 
-const styles = theme => ({
-  paper: {
-    width: "100%",
-    padding: `0px ${theme.spacing.unit}px 0 ${theme.spacing.unit}px`,
-    [theme.breakpoints.up("sm")]: {
-      width: "450px",
-      height: "650px",
-      marginTop: "5%",
-      borderRadius: "4px"
-    },
-    [theme.breakpoints.down(600)]: {
-      "box-shadow": "0px 0px"
-    }
-  },
-  app: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    flexGrow: 1,
-    fontFamily: ["proxima-nova", "sans-serif"],
-    backgroundColor: "#FFF",
-    width: "100%",
-    margin: "0px"
-  },
-  zIndex: 1000,
-  grid: {}
-});
+export function start() {
+  const app = new App();
+  app.init();
+  //console.log('state:', app.state);
+}
 
-class App extends React.Component {
-  constructor(props) {
-    super(props);
+class App  {
+  constructor() {
+    //super(props);
     this.state = {
       loadingConnext: true,
       hubUrl: null,
@@ -89,15 +80,7 @@ class App extends React.Component {
       ethprovider: null,
       tokenContract: null,
       connext: null,
-      modals: {
-        settings: false,
-        keyGen: false,
-        receive: false,
-        send: false,
-        cashOut: false,
-        scan: false,
-        deposit: false
-      },
+      delegateSigner: null,
       authorized: "false",
       approvalWeiUser: "10000",
       channelState: null,
@@ -115,63 +98,268 @@ class App extends React.Component {
         type: "",
         reset: false
       },
-      browserMinimumBalance: null
+      browserMinimumBalance: null,
+      autopayState: StatusEnum.stopped,
+      history: []
     };
 
-    this.networkHandler = this.networkHandler.bind(this);
+    //this.networkHandler = this.networkHandler.bind(this);
   }
 
   // ************************************************* //
   //                     Hooks                         //
   // ************************************************* //
 
-  async componentDidMount() {
+  setState(entry) {
+    for (var prop in entry) {
+      this.state[prop] = entry[prop];
+    }
+  }
+
+  async init() {
+
+    const storeFile = "./.store";
+
+    // Set up state
+    var data
+    var fileStore
+    try {
+      data = fs.readFileSync(storeFile, 'utf8')
+      //console.log(data)
+      fileStore = new Map(JSON.parse(data))
+      //console.log('store data', fileStore)
+    } catch(err) {
+        console.log(err.message)
+    }
+
+    // Set up state
+    const mnemonic = fileStore.get("mnemonic");
+    //console.log('mnemonic', mnemonic);
     // on mount, check if you need to refund by removing maxBalance
-    localStorage.removeItem("refunding");
-
-    // set public url
-    publicUrl = window.location.origin.toLowerCase();
-    console.log(publicUrl)
-
-    // Get mnemonic and rpc type
-    let mnemonic = localStorage.getItem("mnemonic");
-    let rpc = localStorage.getItem("rpc-prod");
-
-    // If no rpc, get from env and save to local storage
+    fileStore.delete("refunding");
+    let rpc = fileStore.get("rpc-prod");
+    // TODO: better way to set default provider
+    // if it doesnt exist in storage
     if (!rpc) {
-      rpc = env === "development" ? "LOCALHOST" : "MAINNET";
-      localStorage.setItem("rpc-prod", rpc);
+      rpc = "ROPSTEN"//env === "development" ? "LOCALHOST" : "MAINNET";
+      fileStore.set("rpc-prod", rpc);
     }
-    // If no mnemonic, create one and save to local storage
-    if (!mnemonic) {
-      mnemonic = eth.Wallet.createRandom().mnemonic;
-      localStorage.setItem("mnemonic", mnemonic);
+    // If a browser address exists, create wallet
+    if (mnemonic) {
+      const delegateSigner = await createWalletFromMnemonic(mnemonic);
+      const address = await delegateSigner.getAddressString();
+      //TODO - no state
+      this.setState({
+        'delegateSigner': delegateSigner,
+        'address': address,
+        mnemonic
+      });
+      //console.log('address', address)
+      store.dispatch({
+        type: "SET_WALLET",
+        text: delegateSigner
+      });
+
+      //console.log('setWeb3')
+      //await this.setWeb3(rpc);
+      console.log('setConnext')
+      await this.setConnext(rpc, mnemonic);
+      console.log('setTokencontract')
+      await this.setTokenContract();
+
+      console.log('pollConnextState')
+      await this.pollConnextState();
+      console.log('setBrowserWalletMinimumBalance')
+      await this.setBrowserWalletMinimumBalance();
+      console.log('poller')
+      await this.poller();
+    } else {
+      // Else, we create a new address
+      const delegateSigner = await createWallet(this.state.web3);
+      const address = await delegateSigner.getAddressString();
+      this.setState({
+          'delegateSigner': delegateSigner,
+          'address': address
+      });
+      store.dispatch({
+        type: "SET_WALLET",
+        text: delegateSigner
+      });
+      // Then refresh the page
+      //window.location.reload();
     }
 
-    await this.setConnext(rpc, mnemonic);
-    await this.setTokenContract();
-    await this.pollConnextState();
-    await this.setBrowserWalletMinimumBalance();
-    await this.poller();
+    // Initialise authorisation
+    //await this.authorizeHandler();
+
+    // Start websockets server
+    await this.startWsServer();
+
+  }
+
+  async startWsServer() {
+    const express = Express();
+    const server = Http.Server(express);
+    webSocket = socketIo(server);
+
+    server.listen(WS_PORT);
+
+    console.log(`Listening on port ${WS_PORT}...`);
+    // WARNING: app.listen(80) will NOT work here!
+
+    express.get('/', function (req, res) {
+      res.sendFile(__dirname + '/index.html');
+    });
+
+    webSocket.on('connection', (socket) => {
+      console.log('WS connection');
+      socket.emit('autopay', { is: 'connected' });
+      socket.on('payment-request', async (request) => {
+        console.log('payment request', request);
+        const payRequest = JSON.parse(request);
+        await this.sendPayment(payRequest.to, payRequest.amount);
+      });
+
+      socket.on('status', () => {
+        //console.log('received status request')
+        this.sendStatusMessage();
+      });
+
+      socket.on('pause', () => {
+        console.log("pausing at client's request");
+        this.pausePaymentsAndNotify()
+      });
+
+      socket.on('release', () => {
+        console.log("resuming at client's request");
+        this.resumePaymentsAndNotify()
+      });
+    });
+
+    this.setState({ autopayState: StatusEnum.running });
+  }
+
+  async sendStatusMessage() {
+    const status = {
+      address: this.state.address,
+      balance: this.state.channelState ? this.state.channelState.balanceTokenUser : "0",
+      txHistory: this.state.history,
+      hubCollateral: this.state.channelState ? this.state.channelState.balanceTokenHub : "0",
+      status: this.state.autopayState
+    }
+    webSocket.emit('status', JSON.stringify(status));
   }
 
   // ************************************************* //
   //                State setters                      //
   // ************************************************* //
 
-  async networkHandler(rpc) {
-    // called from settingsCard when a new RPC URL is connected
-    // will refresh the page after
-    localStorage.setItem("rpc-prod", rpc);
-    // update refunding variable on rpc switch
-    localStorage.removeItem("maxBalanceAfterRefund");
-    localStorage.removeItem("refunding");
-    window.location.reload();
-    return;
+  // either LOCALHOST MAINNET or RINKEBY
+
+
+
+  async sendPayment(toAccount, amount) {
+    // Check status
+    if (this.state.autopayState !== StatusEnum.running) {
+      console.log('Payment requested but autosigning is paused');
+      return
+    }
+    debugger;
+    let balance = this.state.channelState ? this.state.channelState.balanceTokenUser : 0;
+    const amtWei = Web3.utils.toWei(amount);
+    const payAmount = Web3.utils.isBN(amtWei) ? amtWei : Big(amtWei);
+    let bnBal = Big(balance);
+    if (bnBal.lt(payAmount)) {
+      console.log(` Payment declined. Requested payment amount: ${payAmount} exceeds balance: ${balance}.`);
+      return
+    }
+
+    const payment = {
+        meta: {
+          purchaseId: "payment"
+          // memo: "",
+        },
+        payments: [
+          {
+            recipient: toAccount,
+            amount: {
+              amountToken: amtWei,
+              amountWei: "0"
+            },
+            type: "PT_CHANNEL"
+          }
+        ]
+      };
+
+      try {
+        await this.state.connext.buy(payment);
+        this.addToHistory(payment);
+        console.log('sendPayment done')
+      } catch (err) {
+        console.log(err.message)
+      }
+
+      // Evaluate new balance. See if autosigning should be paused.
+      balance = this.state.channelState ? this.state.channelState.balanceTokenUser : '0';
+      bnBal = Big(balance);
+      if (bnBal.lte(LOW_BALANCE_THRESHOLD)) {
+        this.pausePaymentsAndNotify();
+      }
+  }
+
+  pausePaymentsAndNotify() {
+    webSocket.emit('pausing', 'Temporarily pausing payments.');
+    this.setState({ autopayState: StatusEnum.paused });
+    this.sendStatusMessage();
+  }
+
+  resumePaymentsAndNotify() {
+    webSocket.emit('resuming', 'Temporarily resuming payments.');
+    this.setState({ autopayState: StatusEnum.running });
+    this.sendStatusMessage();
+  }
+
+  checkForTopup() {
+    if  (this.state.autopayState === StatusEnum.paused) {
+      const balance = this.state.channelState ? this.state.channelState.balanceTokenUser : 0;
+      let bnBal = Big(balance);
+      if (bnBal.gt(LOW_BALANCE_THRESHOLD)) {
+        this.resumePaymentsAndNotify();
+      }
+    }
+  }
+
+  async addToHistory(event) {
+    let eventText = '';
+    if (event.meta && event.meta.purchaseId === "payment") {
+      eventText = `Payment of ${Web3.utils.fromWei(event.payments[0].amount.amountToken)} to ${event.payments[0].recipient}. Type: ${event.payments[0].type}`;
+    }
+
+    let history = this.state.history;
+
+    if (history.length >= MAX_HISTORY_ITEMS) {
+      history.pop();
+    }
+    history.unshift(eventText);
+    this.setState({ history: history })
+  }
+
+  async setTokenContract() {
+    try {
+      let { customWeb3, tokenAddress } = this.state;
+      const tokenContract = new customWeb3.eth.Contract(tokenAbi, tokenAddress);
+      this.setState({ tokenContract });
+    } catch (e) {
+      console.log("Error setting token contract");
+      console.log(e);
+    }
   }
 
   async setConnext(rpc, mnemonic) {
-    let hubUrl;
+    console.log('setting Connext')
+    const { address, customWeb3, hubUrl, mnemonic } = this.state;
+
+    let rpcUrl;
     let ethprovider;
     switch (rpc) {
       case "LOCALHOST":
@@ -195,30 +383,53 @@ class App extends React.Component {
       default:
         throw new Error(`Unrecognized rpc: ${rpc}`);
     }
+    console.log('hubUrl', hubUrl)
+
+    //const providerOpts = new ProviderOptions(store, rpcUrl, hubUrl).approving();
+    //const provider = clientProvider(providerOpts);
+    //const customWeb3 = new Web3(provider);
+    //const customId = await customWeb3.eth.net.getId();
+    // NOTE: token/contract/hubWallet ddresses are set to state while initializing connext
+
+    console.log('saving state...')
+    //TODO - no state
+    //this.setState({ customWeb3, hubUrl, rpcUrl });
+    this.setState({
+      'customWeb3': customWeb3,
+      'hubUrl': hubUrl,
+      'rpcUrl': rpcUrl
+    });
 
     const opts = {
-      hubUrl,
-      ethUrl: ethprovider,
-      mnemonic
+      //web3: customWeb3,
+      hubUrl: hubUrl, // in dev-mode: http://localhost:8080,
+      user: address,
+      //origin: "localhost", // TODO: what should this be
+      mnemonic: mnemonic
     };
-    const connext = await Connext.getConnextClient(opts);
-    const address = await connext.wallet.getAddress();
-    console.log(`Successfully set up connext! Connext config:`);
-    console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
-    console.log(`  - hubAddress: ${connext.opts.hubAddress}`);
-    console.log(`  - contractAddress: ${connext.opts.contractAddress}`);
-    console.log(`  - ethNetworkId: ${connext.opts.ethNetworkId}`);
-    console.log(`  - public address: ${address}`);
 
-    this.setState({
-      connext,
-      tokenAddress: connext.opts.tokenAddress,
-      channelManagerAddress: connext.opts.contractAddress,
-      hubWalletAddress: connext.opts.hubAddress,
-      ethNetworkId: connext.opts.ethNetworkId,
-      address,
-      ethprovider
-    });
+    // *** Instantiate the connext client ***
+    console.log('getting Connext client')
+    try {
+      const connext = await createClient(opts);
+      console.log(`Successfully set up connext! Connext config:`);
+      console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
+      console.log(`  - hubAddress: ${connext.opts.hubAddress}`);
+      console.log(`  - contractAddress: ${connext.opts.contractAddress}`);
+      console.log(`  - ethNetworkId: ${connext.opts.ethNetworkId}`);
+      console.log(`  - public address: ${address}`);
+      this.setState({
+        connext,
+        tokenAddress: connext.opts.tokenAddress,
+        channelManagerAddress: connext.opts.contractAddress,
+        hubWalletAddress: connext.opts.hubAddress,
+        ethNetworkId: connext.opts.ethNetworkId,
+        address,
+        ethprovider
+      });
+    } catch (err) {
+      console.log(err.message)
+    }
   }
 
   async setTokenContract() {
@@ -246,11 +457,13 @@ class App extends React.Component {
         runtime: state.runtime,
         exchangeRate: state.runtime.exchangeRate ? state.runtime.exchangeRate.rates.USD : 0
       });
-      this.checkStatus();
+      // Check whether, if autosigning is paused, the balance has been topped up sufficiently.
+      this.checkForTopup();
     });
     // start polling
     await connext.start();
-    this.setState({ loadingConnext: false });
+    console.log('connext loaded')
+    this.setState({ loadingConnext: false })
   }
 
   async poller() {
@@ -261,9 +474,14 @@ class App extends React.Component {
       await this.autoDeposit();
     }, 5000);
 
-    interval(async (iteration, stop) => {
-      await this.autoSwap();
-    }, 1000);
+    //TODO - this is not in card. remove it?
+    interval(
+      async (iteration, stop) => {
+        await this.getCustodialBalance();
+      },
+      5000
+    )
+
   }
 
   async setBrowserWalletMinimumBalance() {
@@ -368,43 +586,28 @@ class App extends React.Component {
   }
 
   async checkStatus() {
-    const { runtime, status } = this.state;
-    let log = () => {};
-    let newStatus = {
-      reset: status.reset
-    };
-
-    if (runtime) {
-      log(`Hub Sync results: ${JSON.stringify(runtime.syncResultsFromHub[0], null, 2)}`);
-      if (runtime.deposit.submitted) {
-        if (!runtime.deposit.detected) {
-          newStatus.type = "DEPOSIT_PENDING";
-        } else {
-          newStatus.type = "DEPOSIT_SUCCESS";
-          newStatus.txHash = runtime.deposit.transactionHash;
-        }
-      }
-      if (runtime.withdrawal.submitted) {
-        if (!runtime.withdrawal.detected) {
-          newStatus.type = "WITHDRAWAL_PENDING";
-        } else {
-          newStatus.type = "WITHDRAWAL_SUCCESS";
-          newStatus.txHash = runtime.withdrawal.transactionHash;
-        }
-      }
-    }
-
-    if (newStatus.type !== status.type) {
-      newStatus.reset = true;
-      console.log(`New channel status! ${JSON.stringify(newStatus)}`);
     }
 
     this.setState({ status: newStatus });
   }
 
-  closeConfirmations() {
-    const { status } = this.state;
-    this.setState({ status: { ...status, reset: false }})
+  async getCustodialBalance() {
+    const { hubUrl, address, customWeb3 } = this.state;
+    const opts = {
+          web3: customWeb3,
+          hubUrl: hubUrl, // in dev-mode: http://localhost:8080,
+          user: address,
+          origin: "localhost", // TODO: what should this be
+          cookie: document.cookie
+        };
+
+    try {
+      //const custodialBalance = await axios.get(`${hubUrl}/channel/${address}/sync?lastChanTx=27&lastThreadUpdateId=0`, opts);
+      //const custodialBalance = await axios.get(`${hubUrl}/custodial/${address}/balance`, opts);
+      //console.log('custodial balance ', custodialBalance)
+    } catch (err) {
+      console.log(err.message)
+    }
   }
 
   // ************************************************* //
@@ -417,162 +620,6 @@ class App extends React.Component {
     });
   }
 
-  async scanURL(path, args) {
-    switch (path) {
-      case "/send":
-        this.setState({
-          sendScanArgs: { ...args }
-        });
-        break;
-      case "/redeem":
-        this.setState({
-          redeemScanArgs: { ...args }
-        });
-        break;
-      default:
-        return;
-    }
-  }
-
-  async closeModal() {
-    await this.setState({ loadingConnext: false });
-  }
-
-  render() {
-    const {
-      address,
-      channelState,
-      sendScanArgs,
-      exchangeRate,
-      connext,
-      connextState,
-      runtime,
-      browserMinimumBalance,
-      ethprovider,
-      status
-    } = this.state;
-    const { classes } = this.props;
-    return (
-      <Router>
-        <Grid className={classes.app}>
-          <Paper elevation={1} className={classes.paper}>
-            <MySnackbar
-              variant="warning"
-              openWhen={this.state.loadingConnext}
-              onClose={() => this.closeModal()}
-              message="Starting Channel Controllers.."
-              duration={30000}
-            />
-            <Confirmations status={status} closeConfirmations={this.closeConfirmations.bind(this)} />
-            <AppBarComponent address={address} />
-            <Route
-              exact
-              path="/"
-              render={props =>
-                runtime && runtime.channelStatus !== "CS_OPEN" ? (
-                  <Redirect to="/support" />
-                ) : (
-                  <Grid>
-                    <Home
-                      {...props}
-                      address={address}
-                      connextState={connextState}
-                      channelState={channelState}
-                      publicUrl={publicUrl}
-                      scanURL={this.scanURL.bind(this)}
-                    />
-
-                    <SetupCard
-                      {...props}
-                      browserMinimumBalance={browserMinimumBalance}
-                      maxTokenDeposit={CHANNEL_DEPOSIT_MAX.toString()}
-                      connextState={connextState}
-                    />
-                  </Grid>
-                )
-              }
-            />
-            <Route
-              path="/deposit"
-              render={props => (
-                <DepositCard
-                  {...props}
-                  address={address}
-                  browserMinimumBalance={browserMinimumBalance}
-                  exchangeRate={exchangeRate}
-                  maxTokenDeposit={CHANNEL_DEPOSIT_MAX.toString()}
-                  connextState={connextState}
-                />
-              )}
-            />
-            <Route
-              path="/settings"
-              render={props => (
-                <SettingsCard
-                  {...props}
-                  networkHandler={this.networkHandler}
-                  connext={connext}
-                  address={address}
-                  exchangeRate={exchangeRate}
-                  runtime={this.state.runtime}
-                />
-              )}
-            />
-            <Route
-              path="/receive"
-              render={props => (
-                <ReceiveCard
-                  {...props}
-                  address={address}
-                  connextState={connextState}
-                  maxTokenDeposit={CHANNEL_DEPOSIT_MAX.toString()}
-                  channelState={channelState}
-                  publicUrl={publicUrl}
-                />
-              )}
-            />
-            <Route
-              path="/send"
-              render={props => (
-                <SendCard
-                  {...props}
-                  web3={ethprovider}
-                  connext={connext}
-                  address={address}
-                  channelState={channelState}
-                  publicUrl={publicUrl}
-                  scanArgs={sendScanArgs}
-                  connextState={connextState}
-                />
-              )}
-            />
-            <Route
-              path="/redeem"
-              render={props => (
-                <RedeemCard {...props} publicUrl={publicUrl} connext={connext} channelState={channelState} connextState={connextState} />
-              )}
-            />
-            <Route
-              path="/cashout"
-              render={props => (
-                <CashOutCard
-                  {...props}
-                  address={address}
-                  channelState={channelState}
-                  publicUrl={publicUrl}
-                  exchangeRate={exchangeRate}
-                  connext={connext}
-                  connextState={connextState}
-                  runtime={runtime}
-                />
-              )}
-            />
-            <Route path="/support" render={props => <SupportCard {...props} channelState={channelState} />} />
-          </Paper>
-        </Grid>
-      </Router>
-    );
-  }
 }
 
-export default withStyles(styles)(App);
+export default App;
