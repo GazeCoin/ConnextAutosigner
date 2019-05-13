@@ -1,3 +1,11 @@
+# Connext Auto-signer
+
+A backend process that will automatically sign payments for a single party, given
+an authorized request. The payment requests will be forwarded to the Connext indra hub.
+This process will manage keys controlling some funds. Whilst the process will run under
+a secure environment, the size of the account should remain small, and be topped up
+when appropriate.
+
 # Card
 
 A simple offchain wallet, hosted in the browser, which utilizes Indra payment channels. Inspired by the SpankCard and Austin Griffith's burner wallet.
