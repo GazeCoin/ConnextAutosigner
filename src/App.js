@@ -2,7 +2,7 @@ import { setWallet } from "./utils/actions.js";
 import { createStore } from "redux";
 //import { getConnextClient } from "connext/dist/Connext.js";
 import Connext from 'connext';
-import { types, getters, big, createClient } from "connext/dist";
+import { types, getters, big, getConnextClient } from "connext/dist";
 import ProviderOptions from "../dist/utils/ProviderOptions.js";
 import clientProvider from "../dist/utils/web3/clientProvider.js";
 import { Big, maxBN, minBN } from 'connext/dist/lib/bn.js';
@@ -60,7 +60,7 @@ const DEPOSIT_ESTIMATED_GAS = new Big("700000") // 700k gas
 const HUB_EXCHANGE_CEILING = eth.constants.WeiPerEther.mul(Big(69)); // 69 TST
 const CHANNEL_DEPOSIT_MAX = eth.constants.WeiPerEther.mul(Big(30)); // 30 TST
 const HASH_PREAMBLE = "SpankWallet authentication message:"
-const LOW_BALANCE_THRESHOLD = Big(process.env.LOW_BALANCE_THRESHOLD);
+const LOW_BALANCE_THRESHOLD = Big(process.env.LOW_BALANCE_THRESHOLD.toString());
 
 export function start() {
   const app = new App();
@@ -357,9 +357,9 @@ class App  {
 
   async setConnext(rpc, mnemonic) {
     console.log('setting Connext')
-    const { address, customWeb3, hubUrl, mnemonic } = this.state;
+    const { address, customWeb3 } = this.state;
 
-    let rpcUrl;
+    let rpcUrl, hubUrl;
     let ethprovider;
     switch (rpc) {
       case "LOCALHOST":
@@ -411,7 +411,7 @@ class App  {
     // *** Instantiate the connext client ***
     console.log('getting Connext client')
     try {
-      const connext = await createClient(opts);
+      const connext = await getConnextClient(opts);
       console.log(`Successfully set up connext! Connext config:`);
       console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
       console.log(`  - hubAddress: ${connext.opts.hubAddress}`);
@@ -583,12 +583,6 @@ class App  {
     if (channelState && weiBalance.gt(Big("0")) && tokenBalance.lte(HUB_EXCHANGE_CEILING)) {
       await this.state.connext.exchange(channelState.balanceWeiUser, "wei");
     }
-  }
-
-  async checkStatus() {
-    }
-
-    this.setState({ status: newStatus });
   }
 
   async getCustodialBalance() {
