@@ -3,7 +3,7 @@ import { store } from "./App";
 const bip39 = require("bip39");
 const hdkey = require("ethereumjs-wallet/hdkey");
 
-export async function createWallet(web3) {
+export async function createWallet() {
   const mnemonic = bip39.generateMnemonic();
   const seed = bip39.mnemonicToSeed(mnemonic);
   const wallet = await hdkey
@@ -27,6 +27,10 @@ export async function createWallet(web3) {
   localStorage.removeItem("hasBeenWarned");
   */
   return wallet;
+}
+
+export function createMnemonic() {
+  return bip39.generateMnemonic();
 }
 
 export async function createWalletFromMnemonic(mnemonic) {

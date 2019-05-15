@@ -6,7 +6,7 @@ import { types, getters, big, getConnextClient } from "connext/dist";
 import ProviderOptions from "../dist/utils/ProviderOptions.js";
 import clientProvider from "../dist/utils/web3/clientProvider.js";
 import { Big, maxBN, minBN } from 'connext/dist/lib/bn.js';
-import { createWalletFromMnemonic, createWallet } from "./walletGen";
+import { createMnemonic } from "./walletGen";
 import axios from "axios";
 //import BigNumber from "bignumber.js";
 //import {CurrencyType} from "connext/dist/state/ConnextState/CurrencyTypes";
@@ -61,6 +61,7 @@ const HUB_EXCHANGE_CEILING = eth.constants.WeiPerEther.mul(Big(69)); // 69 TST
 const CHANNEL_DEPOSIT_MAX = eth.constants.WeiPerEther.mul(Big(30)); // 30 TST
 const HASH_PREAMBLE = "SpankWallet authentication message:"
 const LOW_BALANCE_THRESHOLD = Big(process.env.LOW_BALANCE_THRESHOLD.toString());
+const MAX_GAS_PRICE = Big("20000000000"); // 20 gWei
 
 export function start() {
   const app = new App();
@@ -133,7 +134,7 @@ class App  {
     }
 
     // Set up state
-    const mnemonic = fileStore.get("mnemonic");
+    let mnemonic = fileStore.get("mnemonic");
     //console.log('mnemonic', mnemonic);
     // on mount, check if you need to refund by removing maxBalance
     fileStore.delete("refunding");
@@ -145,49 +146,28 @@ class App  {
       fileStore.set("rpc-prod", rpc);
     }
     // If a browser address exists, create wallet
-    if (mnemonic) {
-      const delegateSigner = await createWalletFromMnemonic(mnemonic);
-      const address = await delegateSigner.getAddressString();
-      //TODO - no state
-      this.setState({
-        'delegateSigner': delegateSigner,
-        'address': address,
-        mnemonic
-      });
-      //console.log('address', address)
-      store.dispatch({
-        type: "SET_WALLET",
-        text: delegateSigner
-      });
-
-      //console.log('setWeb3')
-      //await this.setWeb3(rpc);
-      console.log('setConnext')
-      await this.setConnext(rpc, mnemonic);
-      console.log('setTokencontract')
-      await this.setTokenContract();
-
-      console.log('pollConnextState')
-      await this.pollConnextState();
-      console.log('setBrowserWalletMinimumBalance')
-      await this.setBrowserWalletMinimumBalance();
-      console.log('poller')
-      await this.poller();
-    } else {
-      // Else, we create a new address
-      const delegateSigner = await createWallet(this.state.web3);
-      const address = await delegateSigner.getAddressString();
-      this.setState({
-          'delegateSigner': delegateSigner,
-          'address': address
-      });
-      store.dispatch({
-        type: "SET_WALLET",
-        text: delegateSigner
-      });
-      // Then refresh the page
-      //window.location.reload();
+    if (!mnemonic) {
+      mnemonic = createMnemonic();
+      const storeData = JSON.stringify([ {"mnemonic": mnemonic} ]);
+      //console.log(storeData)
+      fs.writeFile(storeFile, storeData, function (err) {
+         if (err) throw err;
+         console.log('store file saved')
+      })
     }
+
+
+    console.log('setConnext')
+    await this.setConnext(rpc, mnemonic);
+    console.log('setTokencontract')
+    await this.setTokenContract();
+
+    console.log('pollConnextState')
+    await this.pollConnextState();
+    console.log('setBrowserWalletMinimumBalance')
+    await this.setBrowserWalletMinimumBalance();
+    console.log('poller')
+    await this.poller();
 
     // Initialise authorisation
     //await this.authorizeHandler();
@@ -357,7 +337,7 @@ class App  {
 
   async setConnext(rpc, mnemonic) {
     console.log('setting Connext')
-    const { address, customWeb3 } = this.state;
+    const { customWeb3 } = this.state;
 
     let rpcUrl, hubUrl;
     let ethprovider;
@@ -403,7 +383,7 @@ class App  {
     const opts = {
       //web3: customWeb3,
       hubUrl: hubUrl, // in dev-mode: http://localhost:8080,
-      user: address,
+      //user: address,
       //origin: "localhost", // TODO: what should this be
       mnemonic: mnemonic
     };
@@ -412,6 +392,7 @@ class App  {
     console.log('getting Connext client')
     try {
       const connext = await getConnextClient(opts);
+      const address = await connext.wallet.getAddress();
       console.log(`Successfully set up connext! Connext config:`);
       console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
       console.log(`  - hubAddress: ${connext.opts.hubAddress}`);
