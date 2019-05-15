@@ -142,13 +142,13 @@ class App  {
     // TODO: better way to set default provider
     // if it doesnt exist in storage
     if (!rpc) {
-      rpc = "ROPSTEN"//env === "development" ? "LOCALHOST" : "MAINNET";
+      rpc = "ROPSTEN"; //env === "development" ? "LOCALHOST" : "MAINNET";
       fileStore.set("rpc-prod", rpc);
     }
     // If a browser address exists, create wallet
     if (!mnemonic) {
       mnemonic = createMnemonic();
-      const storeData = JSON.stringify([ {"mnemonic": mnemonic} ]);
+      const storeData = JSON.stringify([ ["mnemonic", mnemonic] ]);
       //console.log(storeData)
       fs.writeFile(storeFile, storeData, function (err) {
          if (err) throw err;
@@ -324,17 +324,6 @@ class App  {
     this.setState({ history: history })
   }
 
-  async setTokenContract() {
-    try {
-      let { customWeb3, tokenAddress } = this.state;
-      const tokenContract = new customWeb3.eth.Contract(tokenAbi, tokenAddress);
-      this.setState({ tokenContract });
-    } catch (e) {
-      console.log("Error setting token contract");
-      console.log(e);
-    }
-  }
-
   async setConnext(rpc, mnemonic) {
     console.log('setting Connext')
     const { customWeb3 } = this.state;
@@ -432,6 +421,7 @@ class App  {
     let connext = this.state.connext;
     // register connext listeners
     connext.on("onStateChange", state => {
+      console.log('state change: ', state.persistent.channel)
       this.setState({
         channelState: state.persistent.channel,
         connextState: state,
