@@ -223,6 +223,7 @@ class App  {
     const status = {
       address: this.state.address,
       balance: this.state.channelState ? this.state.channelState.balanceTokenUser : "0",
+      ethBalance: this.state.channelState ? this.state.channelState.balanceWeiUser : "0",
       txHistory: this.state.history,
       hubCollateral: this.state.channelState ? this.state.channelState.balanceTokenHub : "0",
       status: this.state.autopayState
@@ -244,7 +245,6 @@ class App  {
       console.log('Payment requested but autosigning is paused');
       return
     }
-    debugger;
     let balance = this.state.channelState ? this.state.channelState.balanceTokenUser : 0;
     const amtWei = Web3.utils.toWei(amount);
     const payAmount = Web3.utils.isBN(amtWei) ? amtWei : Big(amtWei);
@@ -340,7 +340,7 @@ class App  {
         ethprovider = new eth.getDefaultProvider("rinkeby");
         break;
       case "ROPSTEN":
-        const rpcUrl = overrides.ropstenEth || `${publicUrl}/api/ropsten/eth`;
+        rpcUrl = overrides.ropstenEth || `${publicUrl}/api/ropsten/eth`;
         ethprovider = new eth.providers.JsonRpcProvider(rpcUrl);
         //ethprovider = new eth.getDefaultProvider("ropsten");
         hubUrl = overrides.ropstenHub || `${publicUrl}/api/ropsten/hub`;
@@ -374,7 +374,8 @@ class App  {
       hubUrl: hubUrl, // in dev-mode: http://localhost:8080,
       //user: address,
       //origin: "localhost", // TODO: what should this be
-      mnemonic: mnemonic
+      mnemonic: mnemonic,
+      ethUrl: rpcUrl
     };
 
     // *** Instantiate the connext client ***
@@ -481,6 +482,7 @@ class App  {
       wei: minConvertable.toWEI().amount,
       dai: minConvertable.toUSD().amount
     }
+    console.log('min deposit balance: ', browserMinimumBalance.wei);
     this.setState({ browserMinimumBalance })
     return browserMinimumBalance
   }

@@ -33,6 +33,7 @@
       console.log('status reply: ', s);
       document.getElementById('address').innerText = s.address;
       document.getElementById('userbal').innerText = s.balance/(10**18);
+      document.getElementById('userbaleth').innerText = s.ethBalance/(10**18);
       document.getElementById('status').innerText = s.status;
       document.getElementById('hubtoken').innerText = s.hubCollateral/(10**18);
       document.getElementById('histlist').innerHTML = parseHistory(s.txHistory);
@@ -72,6 +73,10 @@
   <p>
   <span class="stat">
     <label class="head">Balance: </label><label class="data" id="userbal" ></label>
+  </span>
+  <p>
+  <span class="stat">
+    <label class="head">ETH Balance: </label><label class="data" id="userbaleth" ></label>
   </span>
   <p>
   <span class="stat">
