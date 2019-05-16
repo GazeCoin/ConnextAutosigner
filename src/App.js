@@ -18,6 +18,7 @@ import Storage from './utils/Storage.js';
 import Express from 'express';
 import Http from 'http';
 import socketIo from 'socket.io';
+import Web3 from 'web3';
 
 const { CurrencyType, CurrencyConvertable } = types
 const { getExchangeRates, hasPendingOps } = new Connext.Utils();
@@ -29,10 +30,12 @@ let publicUrl='localhost';
 let localStorage = new Storage();
 let webSocket;
 
-const Web3 = require("web3");
+//const Web3 = require("web3");
+const web3 = new Web3();
 const eth = require("ethers");
 //const BN = Web3.utils.BN;
 //const humanTokenAbi = require("./abi/humanToken.json");
+debugger;
 
 const env = process.env.NODE_ENV;
 const ERC20 = [{ "constant": true, "inputs": [], "name": "name", "outputs": [{ "name": "", "type": "string" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "minter", "outputs": [{ "name": "", "type": "address" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "totalSupply", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "createIlliquidToken", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_from", "type": "address" }, { "name": "_recipient", "type": "address" }, { "name": "_amount", "type": "uint256" }], "name": "transferFrom", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "endMintingTime", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "createToken", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "", "type": "address" }], "name": "illiquidBalance", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "symbol", "outputs": [{ "name": "", "type": "string" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [{ "name": "_recipient", "type": "address" }, { "name": "_amount", "type": "uint256" }], "name": "transfer", "outputs": [{ "name": "o_success", "type": "bool" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [], "name": "LOCKOUT_PERIOD", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": true, "inputs": [{ "name": "_owner", "type": "address" }, { "name": "_spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "o_remaining", "type": "uint256" }], "payable": false, "type": "function" }, { "constant": false, "inputs": [], "name": "makeLiquid", "outputs": [], "payable": false, "type": "function" }, { "inputs": [{ "name": "_minter", "type": "address" }, { "name": "_endMintingTime", "type": "uint256" }], "payable": false, "type": "constructor" }, { "anonymous": false, "inputs": [{ "indexed": true, "name": "_from", "type": "address" }, { "indexed": true, "name": "_recipient", "type": "address" }, { "indexed": false, "name": "_value", "type": "uint256" }], "name": "Transfer", "type": "event" }, { "anonymous": false, "inputs": [{ "indexed": true, "name": "_owner", "type": "address" }, { "indexed": true, "name": "_spender", "type": "address" }, { "indexed": false, "name": "_value", "type": "uint256" }], "name": "Approval", "type": "event" }]
@@ -246,14 +249,15 @@ class App  {
       return
     }
     let balance = this.state.channelState ? this.state.channelState.balanceTokenUser : 0;
-    const amtWei = Web3.utils.toWei(amount);
-    const payAmount = Web3.utils.isBN(amtWei) ? amtWei : Big(amtWei);
+    const amtGze = web3.utils.toWei(amount);
+    const payAmount = web3.utils.isBN(amtGze) ? amtGze : Big(amtGze);
     let bnBal = Big(balance);
     if (bnBal.lt(payAmount)) {
       console.log(` Payment declined. Requested payment amount: ${payAmount} exceeds balance: ${balance}.`);
       return
     }
 
+    debugger;
     const payment = {
         meta: {
           purchaseId: "payment"
@@ -262,16 +266,15 @@ class App  {
         payments: [
           {
             recipient: toAccount,
-            amount: {
-              amountToken: amtWei,
-              amountWei: "0"
-            },
+            amountToken: amtGze,
+            amountWei: "0",
             type: "PT_CHANNEL"
           }
         ]
       };
 
       try {
+        debugger;
         await this.state.connext.buy(payment);
         this.addToHistory(payment);
         console.log('sendPayment done')
@@ -312,7 +315,7 @@ class App  {
   async addToHistory(event) {
     let eventText = '';
     if (event.meta && event.meta.purchaseId === "payment") {
-      eventText = `Payment of ${Web3.utils.fromWei(event.payments[0].amount.amountToken)} to ${event.payments[0].recipient}. Type: ${event.payments[0].type}`;
+      eventText = `Payment of ${web3.utils.fromWei(event.payments[0].amountToken)} to ${event.payments[0].recipient}. Type: ${event.payments[0].type}`;
     }
 
     let history = this.state.history;
