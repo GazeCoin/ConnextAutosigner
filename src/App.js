@@ -1,16 +1,12 @@
 import { setWallet } from "./utils/actions.js";
 import { createStore } from "redux";
-//import { getConnextClient } from "connext/dist/Connext.js";
 import Connext from 'connext';
-import { types, getters, big, getConnextClient } from "connext/dist";
+import { getConnextClient, Utils } from "connext/dist";
 import ProviderOptions from "../dist/utils/ProviderOptions.js";
 import clientProvider from "../dist/utils/web3/clientProvider.js";
-import { Big, maxBN, minBN } from 'connext/dist/lib/bn.js';
+import { maxBN, minBN } from 'connext/dist/lib/bn.js';
 import { createMnemonic } from "./walletGen";
 import axios from "axios";
-//import BigNumber from "bignumber.js";
-//import {CurrencyType} from "connext/dist/state/ConnextState/CurrencyTypes";
-//import CurrencyConvertable from "connext/dist/lib/currency/CurrencyConvertable";
 //import getExchangeRates from "connext/dist/lib/getExchangeRates";
 import interval from "interval-promise";
 import fs from 'fs';
@@ -20,11 +16,10 @@ import Http from 'http';
 import socketIo from 'socket.io';
 import Web3 from 'web3';
 
-const { CurrencyType, CurrencyConvertable } = types
-const { getExchangeRates, hasPendingOps } = new Connext.Utils();
-//const { Big, maxBN, minBN } = Connext.big
-export const store = createStore(setWallet, null);
+const { getExchangeRates, hasPendingOps } = new Utils();
 
+export const store = createStore(setWallet, null);
+const Big = (n) => eth.utils.bigNumberify(n.toString());
 
 let publicUrl='localhost';
 let localStorage = new Storage();
@@ -58,7 +53,7 @@ const overrides = {
   mainnetEth: process.env.REACT_APP_MAINNET_ETH_OVERRIDE
 };
 
-const DEPOSIT_ESTIMATED_GAS = new Big("700000") // 700k gas
+const DEPOSIT_ESTIMATED_GAS = Big("700000") // 700k gas
 //const DEPOSIT_MINIMUM_WEI = new BigNumber(Web3.utils.toWei("0.020", "ether")); // 30 FIN
 const HUB_EXCHANGE_CEILING = eth.constants.WeiPerEther.mul(Big(69)); // 69 TST
 const CHANNEL_DEPOSIT_MAX = eth.constants.WeiPerEther.mul(Big(30)); // 30 TST
@@ -102,7 +97,8 @@ class App  {
         type: "",
         reset: false
       },
-      browserMinimumBalance: null,
+      minDeposit: null,
+      naxDeposit: null,
       autopayState: StatusEnum.stopped,
       history: []
     };
@@ -168,7 +164,7 @@ class App  {
     console.log('pollConnextState')
     await this.pollConnextState();
     console.log('setBrowserWalletMinimumBalance')
-    await this.setBrowserWalletMinimumBalance();
+    await this.setDepositLimits();
     console.log('poller')
     await this.poller();
 
@@ -384,7 +380,7 @@ class App  {
     // *** Instantiate the connext client ***
     console.log('getting Connext client')
     try {
-      const connext = await getConnextClient(opts);
+      const connext = await Connext.createClient(opts);
       const address = await connext.wallet.getAddress();
       console.log(`Successfully set up connext! Connext config:`);
       console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
@@ -430,7 +426,7 @@ class App  {
         channelState: state.persistent.channel,
         connextState: state,
         runtime: state.runtime,
-        exchangeRate: state.runtime.exchangeRate ? state.runtime.exchangeRate.rates.USD : 0
+        exchangeRate: state.runtime.exchangeRate ? state.runtime.exchangeRate.rates.DAI : 0
       });
       // Check whether, if autosigning is paused, the balance has been topped up sufficiently.
       this.checkForTopup();
@@ -459,41 +455,24 @@ class App  {
 
   }
 
-  async setBrowserWalletMinimumBalance() {
+  async setDepositLimits() {
     const { connextState, ethprovider } = this.state;
-    // let gasEstimateJson = await eth.utils.fetchJson({ url: `https://ethgasstation.info/json/ethgasAPI.json` });
-    let providerGasPrice = await ethprovider.getGasPrice();
-    // let currentGasPrice = Math.round((gasEstimateJson.average / 10) * 2); // multiply gas price by two to be safe
-    // dont let gas price be any higher than the max
-    // currentGasPrice = eth.utils.parseUnits(minBN(Big(currentGasPrice.toString()), MAX_GAS_PRICE).toString(), "gwei");
-    // unless it really needs to be: average eth gas station price w ethprovider's
-    // currentGasPrice = currentGasPrice.add(providerGasPrice).div(eth.constants.Two);
-
-    providerGasPrice = MAX_GAS_PRICE; // hardcode for now
-    console.log(`Gas Price = ${providerGasPrice}`);
-
+    let gasPrice = await ethprovider.getGasPrice()
+    console.log(`Gas Price: ${gasPrice}`);
     // default connext multiple is 1.5, leave 2x for safety
-    const totalDepositGasWei = DEPOSIT_ESTIMATED_GAS.mul(Big(2)).mul(providerGasPrice);
+    const totalDepositGasWei = DEPOSIT_ESTIMATED_GAS.mul(Big(2)).mul(gasPrice);
 
-    // add dai conversion
-    const minConvertable = new CurrencyConvertable(
-      CurrencyType.WEI,
-      totalDepositGasWei,
-      () => getExchangeRates(connextState)
-    )
-    const browserMinimumBalance = {
-      wei: minConvertable.toWEI().amount,
-      dai: minConvertable.toUSD().amount
-    }
-    console.log('min deposit balance: ', browserMinimumBalance.wei);
-    this.setState({ browserMinimumBalance })
-    return browserMinimumBalance
+    const minDeposit = Connext.Currency.WEI(totalDepositGasWei, () => getExchangeRates(connextState));
+
+    const maxDeposit = Connext.Currency.DEI(CHANNEL_DEPOSIT_MAX, () => getExchangeRates(connextState));
+
+    this.setState({ maxDeposit, minDeposit });
   }
 
   async autoDeposit() {
-    const { address, tokenContract, connextState, tokenAddress, connext, browserMinimumBalance, ethprovider } = this.state;
+    const { address, tokenContract, connextState, tokenAddress, connext, minDeposit, ethprovider } = this.state;
 
-    if (!connext || !browserMinimumBalance) return;
+    if (!connext || !minDeposit) return;
 
     const balance = await ethprovider.getBalance(address);
 
@@ -510,7 +489,7 @@ class App  {
     }
 
     if (balance.gt(eth.constants.Zero) || tokenBalance.gt(eth.constants.Zero)) {
-      const minWei = Big(browserMinimumBalance.wei);
+      const minWei = minDeposit.toWEI().floor();
       if (balance.lt(minWei)) {
         // don't autodeposit anything under the threshold
         // update the refunding variable before returning
