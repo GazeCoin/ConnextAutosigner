@@ -11,9 +11,9 @@ import axios from "axios";
 import interval from "interval-promise";
 import fs from 'fs';
 import Storage from './utils/Storage.js';
-import Express from 'express';
-import Http from 'http';
-import socketIo from 'socket.io';
+//import Express from 'express';
+//import Http from 'http';
+//import socketIo from 'socket.io';
 import Web3 from 'web3';
 
 const { getExchangeRates, hasPendingOps } = new Utils();
@@ -30,6 +30,9 @@ const web3 = new Web3();
 const eth = require("ethers");
 //const BN = Web3.utils.BN;
 //const humanTokenAbi = require("./abi/humanToken.json");
+const express = require('express');
+var app = express();
+
 debugger;
 
 const env = process.env.NODE_ENV;
@@ -60,6 +63,7 @@ const CHANNEL_DEPOSIT_MAX = eth.constants.WeiPerEther.mul(Big(30)); // 30 TST
 const HASH_PREAMBLE = "SpankWallet authentication message:"
 const LOW_BALANCE_THRESHOLD = Big(process.env.LOW_BALANCE_THRESHOLD.toString());
 const MAX_GAS_PRICE = Big("20000000000"); // 20 gWei
+let mode = 'adbot';  // or 'proxybot'
 
 export function start() {
   const app = new App();
@@ -177,7 +181,37 @@ class App  {
   }
 
   async startWsServer() {
-    const express = Express();
+    //const express = Express();
+    var router = express.Router();
+    router.use(function(req, res, next) {
+        console.log('request received');
+        next();
+    });
+
+    router.get('/', function(req, res) {
+       console.log('get /');
+       res.json({ mode: mode, account: state.address })
+    });
+
+    router.get('/balance', function(req, res) {
+      console.log('get /balance');
+       res.json({ account: state.address, balance: state.channelState ? state.channelState.balanceTokenUser : "0" })
+    });
+
+    router.route('/pay/:payto/:amount/:locid?')
+      .post(async function(req, res) {
+         console.log('POST /pay ', req.params.payto, ' ', req.params.amount, ' ', req.params.locid);
+         // do payment
+         let result = await this.sendPayment(req.params.payto, req.params.amount);
+         res.json({ result: result ? "ok" : "error", error: ""})
+    });
+
+    app.use('/', router);
+    app.listen(8080);
+    console.log('Listening on port 8080...');
+
+    // Web socket
+    /*
     const server = Http.Server(express);
     webSocket = socketIo(server);
 
@@ -214,6 +248,7 @@ class App  {
         this.resumePaymentsAndNotify()
       });
     });
+    */
 
     this.setState({ autopayState: StatusEnum.running });
   }
