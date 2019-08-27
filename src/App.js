@@ -1,6 +1,6 @@
 import { setWallet } from "./utils/actions.js";
 import { createStore } from "redux";
-import Connext from 'connext';
+import * as Connext from 'connext';
 import { getConnextClient, Utils } from "connext/dist";
 import ProviderOptions from "../dist/utils/ProviderOptions.js";
 import clientProvider from "../dist/utils/web3/clientProvider.js";
@@ -166,7 +166,7 @@ class App  {
     console.log('setBrowserWalletMinimumBalance')
     await this.setDepositLimits();
     console.log('poller')
-    await this.poller();
+    this.poller();
 
     // Initialise authorisation
     //await this.authorizeHandler();
@@ -363,24 +363,28 @@ class App  {
     //TODO - no state
     //this.setState({ customWeb3, hubUrl, rpcUrl });
     this.setState({
-      'customWeb3': customWeb3,
-      'hubUrl': hubUrl,
-      'rpcUrl': rpcUrl
+      customWeb3: customWeb3,
+      hubUrl: hubUrl,
+      rpcUrl: rpcUrl,
+      ethprovider: ethprovider
     });
 
     const opts = {
       //web3: customWeb3,
-      hubUrl: hubUrl, // in dev-mode: http://localhost:8080,
+      hubUrl, // in dev-mode: http://localhost:8080,
       //user: address,
       //origin: "localhost", // TODO: what should this be
-      mnemonic: mnemonic,
-      ethUrl: rpcUrl
+      mnemonic,
+      ethUrl: rpcUrl,
+      logLevel: 2,
     };
 
     // *** Instantiate the connext client ***
     console.log('getting Connext client')
     try {
+      debugger;
       const connext = await Connext.createClient(opts);
+      debugger;
       const address = await connext.wallet.getAddress();
       console.log(`Successfully set up connext! Connext config:`);
       console.log(`  - tokenAddress: ${connext.opts.tokenAddress}`);
@@ -391,13 +395,14 @@ class App  {
       this.setState({
         connext,
         tokenAddress: connext.opts.tokenAddress,
-        channelManagerAddress: connext.opts.contractAddress,
+        contractAddress: connext.opts.contractAddress,
         hubWalletAddress: connext.opts.hubAddress,
-        ethNetworkId: connext.opts.ethNetworkId,
+        ethChainId: connext.opts.ethChainId,
         address,
         ethprovider
       });
     } catch (err) {
+      debugger;
       console.log(err.message)
     }
   }
@@ -405,6 +410,7 @@ class App  {
   async setTokenContract() {
     try {
       let { tokenAddress, ethprovider } = this.state;
+      debugger;
       const tokenContract = new eth.Contract(tokenAddress, tokenAbi, ethprovider);
       this.setState({ tokenContract });
     } catch (e) {
