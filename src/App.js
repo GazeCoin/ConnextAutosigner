@@ -182,6 +182,7 @@ class App  {
 
   async startWsServer() {
     //const express = Express();
+    const state = this.state;
     var router = express.Router();
     router.use(function(req, res, next) {
         console.log('request received');
@@ -195,14 +196,17 @@ class App  {
 
     router.get('/balance', function(req, res) {
       console.log('get /balance');
-       res.json({ account: state.address, balance: state.channelState ? state.channelState.balanceTokenUser : "0" })
+      const tokenBal = web3.utils.fromWei(state.channelState ? state.channelState.balanceTokenUser : "0");
+       res.json({ account: state.address, balance: tokenBal });
     });
 
     router.route('/pay/:payto/:amount/:locid?')
-      .post(async function(req, res) {
+      .post(async (req, res) => {
          console.log('POST /pay ', req.params.payto, ' ', req.params.amount, ' ', req.params.locid);
          // do payment
+         //const wei = web3.utils.toWei(req.params.amount, 'ether');
          let result = await this.sendPayment(req.params.payto, req.params.amount);
+         console.log('pay result:', result);
          res.json({ result: result ? "ok" : "error", error: ""})
     });
 
@@ -277,7 +281,7 @@ class App  {
     // Check status
     if (this.state.autopayState !== StatusEnum.running) {
       console.log('Payment requested but autosigning is paused');
-      return
+      return false;
     }
     let balance = this.state.channelState ? this.state.channelState.balanceTokenUser : 0;
     const amtGze = web3.utils.toWei(amount);
@@ -285,7 +289,7 @@ class App  {
     let bnBal = Big(balance);
     if (bnBal.lt(payAmount)) {
       console.log(` Payment declined. Requested payment amount: ${payAmount} exceeds balance: ${balance}.`);
-      return
+      return false;
     }
 
     debugger;
@@ -319,6 +323,8 @@ class App  {
       if (bnBal.lte(LOW_BALANCE_THRESHOLD)) {
         this.pausePaymentsAndNotify();
       }
+
+      return true;
   }
 
   pausePaymentsAndNotify() {
@@ -462,7 +468,7 @@ class App  {
     let connext = this.state.connext;
     // register connext listeners
     connext.on("onStateChange", state => {
-      console.log('state change: ', state.persistent.channel)
+      //console.log('state change: ', state.persistent.channel)
       this.setState({
         channelState: state.persistent.channel,
         connextState: state,
