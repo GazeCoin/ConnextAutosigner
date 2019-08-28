@@ -5,7 +5,7 @@
   "scripts": {
     "start": "set NODE_ENV=ROPSTEN&set PORT=8080& node server.js",
     "adbot": "node server.js adbot",
-    "proxy": "set NODE_ENV=ROPSTEN&set PORT=8082&set MODE=proxybot& node server.js",
+    "proxy": "node server.js proxybot",
     "test": "make test",
     "start-test": "make start-test",
     "build": "tsc",

@@ -321,9 +321,11 @@ class App  {
 
       // Evaluate new balance. See if autosigning should be paused.
       balance = this.state.channelState ? this.state.channelState.balanceTokenUser : '0';
-      bnBal = Big(balance);
-      if (bnBal.lte(LOW_BALANCE_THRESHOLD)) {
-        this.pausePaymentsAndNotify();
+      if (mode === 'adbot') {
+        bnBal = Big(balance);
+        if (bnBal.lte(LOW_BALANCE_THRESHOLD)) {
+          this.pausePaymentsAndNotify();
+        }
       }
 
       return true;
